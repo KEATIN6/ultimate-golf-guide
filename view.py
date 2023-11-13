@@ -19,18 +19,20 @@ class AppPanelMain(wx.Panel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
+        self.session = parent.session
         self.create_ui()
         
     def _create_button(self, sizer, label, function):
-        button = wx.Button(self, label=label)
+        size = (120, -1)
+        button = wx.Button(self, label=label, size=size)
         button.Bind(wx.EVT_BUTTON, function)
-        sizer.Add(button)
+        sizer.Add(button, 0, wx.CENTER)
         
     def create_ui(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self._create_button(sizer, "Add Score", self.on_button_01)
         self._create_button(sizer, "Record Round", self.on_button_02)
-        self._create_button(sizer, "View Known Golfers", self.on_button_03)
+        self._create_button(sizer, "View All Rounds", self.on_button_03)
         self._create_button(sizer, "Add New Park", self.on_button_04)
         self._create_button(sizer, "View Round History", self.on_button_05)
         self._create_button(sizer, "View All Parks", self.on_button_06)
@@ -57,8 +59,7 @@ class AppPanelMain(wx.Panel):
                 print(self.parent.panels[1].round_id)
                  
     def on_button_03(self, event):
-        with dialogs.PlayerDialog(self) as dlg:
-            dlg.ShowModal()  
+        self.parent.on_panel_switch(5)
     
     def on_button_04(self, event):
         with dialogs.ParkDialog(self) as dlg:
@@ -82,12 +83,15 @@ class AppPanelCourse(wx.Panel):
         self.course = None
         self.data = None
         self.course_details = None
+        self.round_details = None
         self.update_course_results()
+        self.update_round_results()
     
     def load_course(self, course):
         self.course = course
         self.title.SetLabel(self.course.course_name)
         self.update_course_results()
+        self.update_round_results()
     
     def update_course_results(self):
         self.course_details = []
@@ -118,10 +122,22 @@ class AppPanelCourse(wx.Panel):
             ColumnDefn("15", "center", 40, "value_15"),
             ColumnDefn("16", "center", 40, "value_16"),
             ColumnDefn("17", "center", 40, "value_17"),
-            ColumnDefn("18", "center", 40, "value_18")
-        ])
+            ColumnDefn("18", "center", 40, "value_18")])
         self.course_olv.useAlternateBackColors = False
         self.course_olv.SetObjects(self.course_details)
+        self.Layout()
+        
+    def update_round_results(self):
+        if self.course:
+            self.round_details = controller.get_player_scores(
+                self.parent.session, self.course.course_id)
+        self.rounds_olv.SetColumns([
+            ColumnDefn("Round ID", "center", 80, "round_id"),
+            ColumnDefn("Player Name", "center", 150, "player_name"),
+            ColumnDefn("Total Strokes", "center", 100, "total_strokes"),
+            ColumnDefn("Tee Time", "center", 150, "tee_time")])
+        self.rounds_olv.useAlternateBackColors = False
+        self.rounds_olv.SetObjects(self.round_details)
         self.Layout()
 
     def create_ui(self):
@@ -189,6 +205,7 @@ class AppPanelCourse(wx.Panel):
                 self, par_values.to_dict(), self.course.no_of_holes, "par"
         ) as dlg:
             dlg.ShowModal()
+            
         if self.data:
             controller.update_holes(
                 self.parent.session, self.course.course_id, self.data)
@@ -336,20 +353,96 @@ class AppPanelParks(wx.Panel):
 
 # %%
 
+class AppPanelRounds(wx.Panel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.session = parent.session
+        self.rounds = []
+        self.data = {}
+        self.create_ui()
+        self.update_list_view()
+        
+    def create_ui(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.list_view = ObjectListView(
+            self, style=wx.LC_REPORT|wx.SUNKEN_BORDER)
+        self.add_button = wx.Button(self, label="+", size=(40, -1))
+        self.add_button.Bind(wx.EVT_BUTTON, self.on_add)
+        self.details_button = wx.Button(self, label="Details", size=(100, -1))
+        self.details_button.Bind(wx.EVT_BUTTON, self.on_details)
+        self.back_button = wx.Button(self, label='Back', size=(100, -1))
+        self.back_button.Bind(wx.EVT_BUTTON, self.on_back)
+        sizer.Add(self.list_view, 1, wx.ALL|wx.EXPAND, 5)
+        
+        button_sizer.Add(self.add_button, 0, wx.LEFT|wx.BOTTOM, 5)
+        button_sizer.Add(self.details_button, 0, wx.LEFT|wx.BOTTOM, 5)
+        button_sizer.Add(self.back_button, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM, 5)
+        
+        
+        sizer.Add(button_sizer, 0, wx.CENTER)
+        self.SetSizer(sizer)
+        self.Layout()
+        
+    def update_list_view(self):
+        self.rounds = controller.get_all_rounds(self.session)
+        self.list_view.SetColumns([
+            ColumnDefn("Round ID", "center", 75, "round_id"),
+            ColumnDefn("Course Name", "left", 220, "course_name"),
+            ColumnDefn("Number of Players", "left", 220, "number_of_players"),
+            ColumnDefn("Best Score", "right", 60, "best_score"),
+            ColumnDefn("Tee Time", "right", 60, "tee_time")])
+        self.list_view.useAlternateBackColors = False
+        self.list_view.SetObjects(self.rounds)
+        
+    def on_details(self, event):
+        selected_round = self.list_view.GetSelectedObject()
+        if selected_round:
+            self.parent.on_panel_switch(1)
+            self.parent.panels[1].load_round(selected_round.round_id)
+        
+    def on_add(self, event):
+        with dialogs.RoundDialog(self, self.parent.session) as dlg:
+            dlg.ShowModal()
+        self.update_list_view()
+        if "round_id" in self.data.keys():
+            round_id = self.data["round_id"]
+            with dialogs.PlayerDialog(self, round_id) as dlg:
+                dlg.ShowModal()
+            if "golfer_ids" in self.data.keys():
+                controller.create_players(
+                    self.session, round_id, self.data["golfer_ids"])
+            self.parent.panels[1].load_round(round_id)
+            self.parent.on_panel_switch(1)
+    
+    def on_back(self, event):
+        self.parent.on_panel_switch(0)
+        
+        
+# %%
+
+
 class AppPanelRound(wx.Panel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.create_ui()
+        self.session = parent.session
+        self.data = {}
         self.round_id = None
         self.players = []
+        self.create_ui()
         self.update_round_results()
         
     def load_round(self, round_id):
+        self.round_id = None
         round_info = controller.get_round_by_id(self.parent.session, round_id)
-        course = controller.get_course_by_id(
-            self.parent.session, round_info.CourseID)
-        self.title_01.SetLabel(f"{course.CourseName}")
+        if round_info:
+            self.round_id = round_id
+            course = controller.get_course_by_id(
+                self.parent.session, round_info.CourseID)
+            self.title_01.SetLabel(f"{course.CourseName}")
+            self.update_round_results()
         
     def update_round_results(self):
         if self.round_id:
@@ -369,6 +462,7 @@ class AppPanelRound(wx.Panel):
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.title_01 = wx.StaticText(self, label="<No Record Loaded!>")
         self.button_01 = wx.Button(self, label="Add Player")
+        self.button_01.Bind(wx.EVT_BUTTON, self.on_add_player)
         h_sizer.Add(self.title_01, 0, wx.ALL|wx.EXPAND, 5)
         sizer.Add(h_sizer)
         self.list_view = ObjectListView(
@@ -377,6 +471,15 @@ class AppPanelRound(wx.Panel):
         sizer.Add(self.button_01, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM, 5)
         self.SetSizerAndFit(sizer)
         self.Layout()
+        
+    def on_add_player(self, event):
+        with dialogs.PlayerDialog(self, self.round_id) as dlg:
+            dlg.ShowModal()
+        if "golfer_ids" in self.data.keys():
+            controller.create_players(
+                self.session, self.round_id, self.data["golfer_ids"])
+            self.update_round_results()
+            
 
 # %%
 
@@ -407,6 +510,7 @@ class AppFrame(wx.Frame):
         self.panels.append(AppPanelParks(self))
         self.panels.append(AppPanelPark(self))
         self.panels.append(AppPanelCourse(self))
+        self.panels.append(AppPanelRounds(self))
         for panel in self.panels:
             self.sizer.Add(panel, 1, wx.EXPAND)
         for panel in self.panels[1:]:

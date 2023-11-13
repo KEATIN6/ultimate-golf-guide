@@ -59,12 +59,7 @@ class CourseTeeDialog(wx.Dialog):
         color = self.color_cbo.GetValue()
         controller.create_course_tees(self.session, self.course, color)
         self.Close()
-    
-    
 
-# %%
-
-    
 # %%
 
 class ParkDialog(wx.Dialog):
@@ -126,7 +121,8 @@ class ParkDialog(wx.Dialog):
         
     def validate(self):
         validation_list = []
-        valid = self.input_park_name.GetValidator().Validate(self.input_park_name)
+        valid = self.input_park_name.GetValidator().Validate(
+            self.input_park_name)
         validation_list.append(valid)
         if all(validation_list):
             return True
@@ -137,8 +133,6 @@ class ParkDialog(wx.Dialog):
             msg.ShowModal()
             msg.Destroy()
             return False
-        
-
 
 # %% 
 
@@ -153,18 +147,12 @@ class CourseDialog(wx.Dialog):
     def create_ui(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.course_name = wx.TextCtrl(self, size=(200,-1))
-        
-        
         self.holes_cbo = wx.ComboBox(self, choices=['9', '18', '27'])
         self.enter_button = wx.Button(self, label="Submit")
-        
-        
         sizer.Add(self.add_widgets("Course Name", self.course_name))
         sizer.Add(self.add_widgets("Number of Holes", self.holes_cbo))
         sizer.Add(self.enter_button, 0, wx.CENTER|wx.BOTTOM, 5)
-        
         self.enter_button.Bind(wx.EVT_BUTTON, self.on_submit_button)
-        
         self.SetSizerAndFit(sizer)
         self.Layout()
         
@@ -182,34 +170,121 @@ class CourseDialog(wx.Dialog):
     def save(self):
         course_name = self.course_name.GetValue()
         no_of_holes = self.holes_cbo.GetValue()
-        controller.create_course(self.session, self.park_id, course_name, no_of_holes)
+        controller.create_course(
+            self.session, self.park_id, course_name, no_of_holes)
 
 # %%
 
-
 class PlayerDialog(wx.Dialog):
-    def __init__(self, parent):
+    def __init__(self, parent, round_id):
         super().__init__(parent)
-        self.session = parent.parent.session
+        self.parent = parent
+        self.session = parent.session
+        self.round_id = round_id
+        self.players_added = 0
+        self.set_number_of_players()
+        self.set_golfers()
         self.create_ui()
         
-    def get_golfers(self):
-        return 
-        
+    def get_all_golfers(self):
+        return controller.get_golfers(self.session)
+    
+    def set_golfers(self):
+        self.selected_player_ids = []
+        if self.round_id:
+            self.selected_player_ids = controller.get_player_ids(
+                self.session, self.round_id)
+        self.players_added = len(self.selected_player_ids)
+    
+    def set_number_of_players(self):
+        self.number_of_players = controller.get_number_of_players(
+            self.parent.session,
+            self.round_id)
+    
+    def transfer_golfer(self, index, is_adding=True):
+        from_object = self.cbo_available_players \
+            if is_adding else self.cbo_selected_players
+        to_object = self.cbo_selected_players \
+            if is_adding else self.cbo_available_players
+        golfer_id = from_object.GetItemText(index, 0)
+        golfer_name = from_object.GetItemText(index, 1)
+        to_object.Append([golfer_id, golfer_name])
+        from_object.DeleteItem(index)
+    
     def create_ui(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
-        cbo_players = wx.ListCtrl(self, size=(300, 500), style=wx.LC_REPORT)
-        cbo_players.InsertColumn(0, "GolferID")
-        cbo_players.InsertColumn(1, "Golfer Name", width=wx.LIST_AUTOSIZE_USEHEADER)
-        
-        for golfer in controller.get_golfers(self.session):
-            cbo_players.Append([golfer[1], golfer[0]])
-        
-        sizer.Add(cbo_players, 0, wx.ALL, 5)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        add_button = wx.Button(self, label="Add", size=(100, - 1))
+        add_button.Bind(wx.EVT_BUTTON, self.on_add)
+        remove_button = wx.Button(self, label="Remove", size=(100, -1))
+        remove_button.Bind(wx.EVT_BUTTON, self.on_remove)
+        h_sizer.Add(add_button, 0, wx.CENTER)
+        h_sizer.Add(remove_button, 0, wx.CENTER)
+        self.cbo_selected_players = wx.ListCtrl(
+            self, size=(300, 105), style=wx.LC_REPORT)
+        self.cbo_selected_players.InsertColumn(0, "GolferID")
+        self.cbo_selected_players.InsertColumn(
+            1, "Golfer Name", width=wx.LIST_AUTOSIZE_USEHEADER)
+        self.cbo_available_players = wx.ListCtrl(
+            self, size=(300, 350), style=wx.LC_REPORT)
+        self.submit_button = wx.Button(self, label="Submit")
+        self.submit_button.Bind(wx.EVT_BUTTON, self.on_submit)
+        self.cbo_available_players.InsertColumn(0, "GolferID")
+        self.cbo_available_players.InsertColumn(
+            1, "Golfer Name", width=wx.LIST_AUTOSIZE_USEHEADER)
+        for golfer in self.get_all_golfers():
+            name, golfer_id = golfer
+            if golfer_id not in self.selected_player_ids:
+                self.cbo_available_players.Append([golfer_id, name])
+            else:
+                self.cbo_selected_players.Append([golfer_id, name])
+        sizer.Add(self.cbo_selected_players, 0, wx.RIGHT|wx.LEFT|wx.TOP, 5)
+        sizer.Add(h_sizer, 0, wx.ALL|wx.CENTER, 5)
+        sizer.Add(self.cbo_available_players, 0, wx.RIGHT|wx.LEFT|wx.BOTTOM, 5)
+        sizer.Add(self.submit_button, 0, wx.CENTER, 5)
         self.SetSizerAndFit(sizer)
         self.Layout()
         
-        
+    def on_submit(self, event):
+        selected_golfer_ids = []
+        for index in range(self.cbo_selected_players.GetItemCount()):
+            selected_golfer_ids.append(
+                self.cbo_selected_players.GetItemText(index, 0))
+        self.parent.data["golfer_ids"] = selected_golfer_ids
+        self.Close()
+    
+    def on_remove(self, event):
+        selected = []
+        last_index = -1
+        count_of_selected = self.cbo_selected_players.GetSelectedItemCount()
+        if count_of_selected == 0:
+            return
+        for _ in range(count_of_selected):
+            item_index = self.cbo_selected_players.GetNextSelected(last_index)
+            last_index = item_index
+            if item_index != -1:
+                selected.append(item_index)
+        for index in reversed(selected):
+            self.players_added -= 1
+            self.transfer_golfer(index, False)
+    
+    def on_add(self, event):
+        selected = []
+        last_index = -1
+        count_of_selected = self.cbo_available_players.GetSelectedItemCount()
+        if self.number_of_players < count_of_selected + self.players_added \
+        or count_of_selected == 0:
+            return
+        for _ in range(count_of_selected):
+            item_index = self.cbo_available_players.GetNextSelected(last_index)
+            last_index = item_index
+            if item_index != -1:
+                selected.append(item_index)
+        for index in reversed(selected):
+            self.players_added += 1
+            self.transfer_golfer(index, True)
+            
+            
 # %%
     
 class RoundDialog(wx.Dialog):
@@ -291,9 +366,9 @@ class RoundDialog(wx.Dialog):
     def save(self):
         course_id = self.retrieve_course_id()
         no_of_players = self.cbo_players.GetValue()[0]
-        game = UGG_Round(self.session, course_id, no_of_players)
-        game.save()
-        self.parent.parent.data["round_id"] = game.RoundID
+        new_round = UGG_Round(self.session, course_id, no_of_players)
+        new_round.save()
+        self.parent.data["round_id"] = new_round.RoundID
         
     def on_button_press(self, event):
         if self.validate():

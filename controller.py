@@ -7,6 +7,12 @@ Created on Tue May 30 21:43:21 2023
 
 # %%
 
+from model import CourseDetailsOlv
+from model import CoursePlayerOlv
+from model import CourseOlv
+from model import ParkOlv
+from model import PlayerOlv
+from model import RoundOlv
 from model import UGG_Course
 from model import UGG_CourseTee
 from model import UGG_Hole
@@ -16,13 +22,10 @@ from model import UGG_ParkPrivacyType
 from model import UGG_Player
 from model import UGG_TeeColor
 from model import UGG_Round
-from model import CourseOlv
-from model import PlayerOlv
-from model import ParkOlv
-from model import CourseDetailsOlv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import model 
+import model
+import sql
 
 # %%
 
@@ -36,18 +39,11 @@ def connect_to_database():
 
 def get_player_olv(session, round_id):
     players = []
-    results = session.query(
-        UGG_Player  
-    ).filter(
-        UGG_Player.RoundID == round_id
-    ).all()
-    for player in results:
-        player_id = player.PlayerID
-        player_name =""
-        score = player.Total
-        best_hole = None
-        olv = PlayerOlv(player_id, player_name, score, best_hole)
-        players.append(olv)
+    results = session.execute(sql.players_round(round_id)).all()
+    for result in results:
+        players.append(PlayerOlv(
+            result[0], result[1] + ' ' + result[2], result[3], result[4]))
+    return players
 
 def get_active_golf_courses(session):
     results = session.query(
@@ -181,10 +177,6 @@ def update_distances(session, course_id, course_tee_id, data):
         total += int(data[hole_number])
         print(total)
     
-
-
-
-
 def get_tee_color_id(session, color):
     results = session.execute(f"""
         SELECT TeeColorID
@@ -204,7 +196,6 @@ def get_hole_id(session, course_id, hole_number):
     if results:
         return results[0][0]
     
-    
 def create_hole_tees(session, course_id, course_tee_id, no_of_holes):
     for hole_number in range(no_of_holes):
         hole_id = get_hole_id(session, course_id, hole_number+1)
@@ -220,10 +211,6 @@ def create_course_tees(session, course, color, difficulty=None, slope=None):
     create_hole_tees(
         session, course.course_id, course_tee.CourseTeeID, course.no_of_holes)
     
-    
-    
-
-
 def get_tee_color_values(session, course_id, color=None):
     query = f"""
         SELECT Color, 
@@ -340,7 +327,9 @@ def get_golfers(session):
         FROM UGG_Golfers
         ORDER BY 1
     """).all()
-    return results
+    if results:
+        return results
+    return []
 
 def get_hole_tee(session, course_tee_id, hole_number):
     results = session.execute(f"""
@@ -365,10 +354,60 @@ def get_tee_colors(session, course_id):
     """).all()
     return results
     
+
+def get_player_scores(session, course_id):
+    results = session.execute(sql.player_scores(course_id)).all()
+    return [CoursePlayerOlv(
+        result[0], result[1], result[2], result[3], result[4], result[5]) 
+        for result in results]
+
+def get_player_ids(session, round_id):
+    results = session.execute(sql.playing_golfer_ids(round_id)).all()
+    if results:
+        return [result[0] for result in results]
+    return []
+
+    
+def get_number_of_players(session, round_id=None, default_value=4):
+    if round_id:
+        query = sql.number_of_players(round_id)
+        results = session.execute(query).all()
+        if results:
+            print(results)
+            return results[0][0]
+    return default_value
+
 def create_course(session, park_id, course_name, no_of_holes):
     course = UGG_Course(park_id, course_name, no_of_holes)
     session.add(course)
     session.commit()
+
+def create_players(session, round_id, golfer_ids):
+    for order, golfer_id in enumerate(golfer_ids):
+        results = session.query(
+            UGG_Player
+        ).filter(
+            round_id == UGG_Player.RoundID
+        ).filter(
+            golfer_id == UGG_Player.GolferID
+        ).all()
+        if results:
+            player = results[0]
+            player.Order = order + 1
+        else:
+            player = UGG_Player(golfer_id, round_id, order + 1)
+        session.add(player)
+        session.commit()
+
+    
+def get_all_rounds(session):
+    results = session.execute(sql.all_rounds()).all()
+    rounds = []
+    for result in results:
+        rounds.append(
+            RoundOlv(result[0], result[1], result[2], result[3], result[4]))
+    return rounds
+    
 
     
 # %%

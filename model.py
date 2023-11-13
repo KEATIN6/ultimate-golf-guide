@@ -14,6 +14,17 @@ from sqlalchemy.ext.declarative import declarative_base
 
 # %%
 
+class RoundOlv:
+    def __init__(self, round_id, course_name, 
+                 number_of_players, best_score, tee_time):
+        self.round_id = round_id
+        self.course_name = course_name
+        self.number_of_players = number_of_players
+        self.best_score = best_score
+        self.tee_time = tee_time
+        
+    # %%
+
 class PlayerOlv:
     def __init__(self, player_id, player_name, score, best_hole):
         self.player_id = player_id
@@ -30,6 +41,19 @@ class ParkOlv:
         self.county = county
         self.privacy_type = privacy_type
         
+# %%
+
+class CoursePlayerOlv:
+    def __init__(self, player_id, round_id, first_name, 
+                 last_name, total_strokes, tee_time):
+        self.player_id = player_id
+        self.round_id = round_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.player_name = first_name + ' ' + last_name
+        self.total_strokes = total_strokes
+        self.tee_time = tee_time
+
 # %%
 
 class CourseDetailsOlv:
@@ -258,9 +282,15 @@ class UGG_Player(Base, DatabaseObject):
     GolferID = Column(Integer)
     RoundID = Column(Integer)
     CourseTeeID = Column(Integer)
-    Total = Column(Integer)
+    TotalStrokes = Column(Integer)
     Order = Column(Integer)
     CreateDate = Column(DateTime)
+    
+    def __init__(self, golfer_id, round_id, order=None):
+        self.GolferID = golfer_id
+        self.RoundID = round_id
+        self.Order = order
+        self.CreateDate = datetime.now()
     
 class UGG_Score(Base, DatabaseObject):
     __tablename__ = "UGG_Scores"
