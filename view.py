@@ -461,14 +461,20 @@ class AppPanelRound(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.title_01 = wx.StaticText(self, label="<No Record Loaded!>")
-        self.button_01 = wx.Button(self, label="Add Player")
-        self.button_01.Bind(wx.EVT_BUTTON, self.on_add_player)
-        h_sizer.Add(self.title_01, 0, wx.ALL|wx.EXPAND, 5)
-        sizer.Add(h_sizer)
+        self.edit_button = wx.Button(self, label="Edit Player(s)", size=(100,-1))
+        self.back_button = wx.Button(self, label="Back", size=(100,-1))
+        self.back_button.Bind(wx.EVT_BUTTON, self.on_back)
+        self.edit_button.Bind(wx.EVT_BUTTON, self.on_add_player)
+        h_sizer.Add(self.edit_button, 0, wx.RIGHT, 5)
+        h_sizer.Add(self.back_button, 0, wx.RIGHT, 5)
+        
+        
+        sizer.Add(self.title_01, 0, wx.ALL|wx.EXPAND, 5)
+        
         self.list_view = ObjectListView(
             self, style=wx.LC_REPORT|wx.SUNKEN_BORDER)
-        sizer.Add(self.list_view, 1, wx.ALL|wx.EXPAND, 5)
-        sizer.Add(self.button_01, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM, 5)
+        sizer.Add(self.list_view, 2, wx.ALL|wx.EXPAND, 5)
+        sizer.Add(h_sizer, 0, wx.LEFT|wx.RIGHT|wx.BOTTOM|wx.CENTER, 5)
         self.SetSizerAndFit(sizer)
         self.Layout()
         
@@ -480,13 +486,16 @@ class AppPanelRound(wx.Panel):
                 self.session, self.round_id, self.data["golfer_ids"])
             self.update_round_results()
             
+    def on_back(self, event):
+        self.parent.on_panel_switch(5)
+            
 
 # %%
 
 class AppFrame(wx.Frame):
     def __init__(self):
         title = "Ultimate Golf Guide"
-        super().__init__(None, title=title, size=(800, 400))
+        super().__init__(None, title=title, size=(830, 400))
         self.session = controller.connect_to_database()
         self.create_menu()
         self.create_ui()
